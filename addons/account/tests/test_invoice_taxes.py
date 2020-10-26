@@ -32,6 +32,14 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
             'amount': 12,
             'sequence': 30,
         })
+        cls.percent_tax_3_incl = cls.env['account.tax'].create({
+            'name': '5% incl',
+            'amount_type': 'percent',
+            'amount': 5,
+            'price_include': True,
+            'include_base_amount': True,
+            'sequence': 40,
+        })
         cls.group_tax = cls.env['account.tax'].create({
             'name': 'group 12% + 21%',
             'amount_type': 'group',
@@ -65,12 +73,12 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         cls.base_tag_pos = cls.base_tax_report_line.tag_ids.filtered(lambda x: not x.tax_negate)
         cls.base_tag_neg = cls.base_tax_report_line.tag_ids.filtered(lambda x: x.tax_negate)
 
-    def _create_invoice(self, taxes_per_line, inv_type='out_invoice'):
+    def _create_invoice(self, taxes_per_line, inv_type='out_invoice', currency_id=False, invoice_payment_term_id=False):
         ''' Create an invoice on the fly.
 
         :param taxes_per_line: A list of tuple (price_unit, account.tax recordset)
         '''
-        return self.env['account.move'].create({
+        vals = {
             'move_type': inv_type,
             'partner_id': self.partner_a.id,
             'invoice_line_ids': [(0, 0, {
@@ -79,7 +87,12 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
                 'price_unit': amount,
                 'tax_ids': [(6, 0, taxes.ids)],
             }) for amount, taxes in taxes_per_line],
-        })
+        }
+        if currency_id:
+            vals['currency_id'] = currency_id.id
+        if invoice_payment_term_id:
+            vals['invoice_payment_term_id'] = invoice_payment_term_id.id
+        return self.env['account.move'].create(vals)
 
     def test_one_tax_per_line(self):
         ''' Test:
@@ -440,20 +453,20 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         ------------------
         2.82       | 20000     | 21% not incl
         '''
-        self.env['res.currency.rate'].search([]).unlink()
-        self.currency_usd_id = self.env.ref("base.USD")
-        self.currency_chf_id = self.env.ref("base.CHF")
-        # make sure that we have USD as base...
-        self.cr.execute("UPDATE res_company SET currency_id = %s WHERE id = %s", 
-            [self.currency_usd_id.id, self.env.company.id])
         self.env['res.currency.rate'].create({
-            'currency_id': self.currency_chf_id.id,
+            'name': '2018-01-01',
             'rate': 1.1726,
-            'name': '2001-01-01'})
+            'currency_id': self.currency_data['currency'].id,
+            'company_id': self.env.company.id,
+        })
+        self.currency_data['currency'].rounding = 0.05
+
         invoice = self.env['account.move'].create({
             'move_type': 'out_invoice',
             'partner_id': self.partner_a.id,
-            'currency_id': self.currency_chf_id.id,
+            'currency_id': self.currency_data['currency'].id,
+            'invoice_date': '2018-01-01',
+            'date': '2018-01-01',
             'invoice_line_ids': [(0, 0, {
                 'name': 'xxxx',
                 'quantity': 20000,
@@ -461,19 +474,25 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
                 'tax_ids': [(6, 0, self.percent_tax_1.ids)],
             })]
         })
-        # don't post!  Post will write() which will cause the amount to recalculate.
-        # but we want to make sure that the calculation is correct when it is made on 
-        # the fly, from a user editing it in the web UI
-        # invoice.post()
-        # make sure the tax is calculated in the foreign currency correctly
-        self.assertRecordValues(invoice.line_ids.filtered('tax_line_id'), [
-            {
-                'name': self.percent_tax_1.name,
-                # 20000 * 2.82 / 1.1726
-                'tax_base_amount': 48098.24,
-                'price_unit': 11844,
-                # tax_base_amount * 21%
-                'credit': 10100.63,
-                'tax_ids': []
-            },
-        ])
+
+        self.assertRecordValues(invoice.line_ids.filtered('tax_line_id'), [{
+            'tax_base_amount': 48098.24,    # 20000 * 2.82 / 1.1726
+            'credit': 10100.63,             # tax_base_amount * 0.21
+        }])
+
+    def test_ensure_no_unbalanced_entry(self):
+        ''' Ensure to not create an unbalanced journal entry when saving. '''
+        self.env['res.currency.rate'].create({
+            'name': '2018-01-01',
+            'rate': 0.654065014,
+            'currency_id': self.currency_data['currency'].id,
+            'company_id': self.env.company.id,
+        })
+        self.currency_data['currency'].rounding = 0.05
+
+        invoice = self._create_invoice([
+            (5, self.percent_tax_3_incl),
+            (10, self.percent_tax_3_incl),
+            (50, self.percent_tax_3_incl),
+        ], currency_id=self.currency_data['currency'], invoice_payment_term_id=self.pay_terms_a)
+        invoice.action_post()
