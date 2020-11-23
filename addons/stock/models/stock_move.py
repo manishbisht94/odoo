@@ -15,7 +15,7 @@ from odoo import SUPERUSER_ID, _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.osv import expression
 from odoo.tools.float_utils import float_compare, float_is_zero, float_repr, float_round
-from odoo.tools.misc import format_date
+from odoo.tools.misc import format_date, OrderedSet
 
 PROCUREMENT_PRIORITIES = [('0', 'Normal'), ('1', 'Urgent')]
 
@@ -183,7 +183,7 @@ class StockMove(models.Model):
     @api.onchange('product_id', 'picking_type_id')
     def onchange_product(self):
         if self.product_id:
-            product = self.product_id.with_context(lang=self.picking_id.partner_id.lang or self.env.user.lang)
+            product = self.product_id.with_context(lang=self._get_lang())
             self.description_picking = product._get_description(self.picking_type_id)
 
     @api.depends('has_tracking', 'picking_type_id.use_create_lots', 'picking_type_id.use_existing_lots', 'state')
@@ -585,7 +585,7 @@ class StockMove(models.Model):
             return
 
         msg = _("The deadline has been automatically updated due to a delay on <a href='#' data-oe-model='%s' data-oe-id='%s'>%s</a>.") % (doc_orig[0]._name, doc_orig[0].id, doc_orig[0].name)
-        msg_subject = _("Deadline updates due to delay on %s", doc_orig[0].name)
+        msg_subject = _("Deadline updated due to delay on %s", doc_orig[0].name)
         # write the message on each document
         for doc in documents:
             last_message = doc.message_ids[:1]
@@ -663,8 +663,7 @@ class StockMove(models.Model):
         return action
 
     def _do_unreserve(self):
-        moves_to_unreserve = self.env['stock.move']
-        moves_not_to_recompute = self.env['stock.move']
+        moves_to_unreserve = OrderedSet()
         for move in self:
             if move.state == 'cancel' or (move.state == 'done' and move.scrapped):
                 # We may have cancelled move in an open picking in a "propagate_cancel" scenario.
@@ -672,16 +671,19 @@ class StockMove(models.Model):
                 continue
             elif move.state == 'done':
                 raise UserError(_("You cannot unreserve a stock move that has been set to 'Done'."))
-            moves_to_unreserve |= move
+            moves_to_unreserve.add(move.id)
+        moves_to_unreserve = self.env['stock.move'].browse(moves_to_unreserve)
 
-        ml_to_update = self.env['stock.move.line']
-        ml_to_unlink = self.env['stock.move.line']
+        ml_to_update, ml_to_unlink = OrderedSet(), OrderedSet()
+        moves_not_to_recompute = OrderedSet()
         for ml in moves_to_unreserve.move_line_ids:
             if ml.qty_done:
-                ml_to_update |= ml
+                ml_to_update.add(ml.id)
             else:
-                ml_to_unlink |= ml
-                moves_not_to_recompute |= ml.move_id
+                ml_to_unlink.add(ml.id)
+                moves_not_to_recompute.add(ml.move_id.id)
+        ml_to_update, ml_to_unlink = self.env['stock.move.line'].browse(ml_to_update), self.env['stock.move.line'].browse(ml_to_unlink)
+        moves_not_to_recompute = self.env['stock.move'].browse(moves_not_to_recompute)
 
         ml_to_update.write({'product_uom_qty': 0})
         ml_to_unlink.unlink()
@@ -858,7 +860,7 @@ class StockMove(models.Model):
 
     @api.onchange('product_id')
     def onchange_product_id(self):
-        product = self.product_id.with_context(lang=self.partner_id.lang or self.env.user.lang)
+        product = self.product_id.with_context(lang=self._get_lang())
         self.name = product.partner_ref
         self.product_uom = product.uom_id.id
 
@@ -1135,8 +1137,9 @@ class StockMove(models.Model):
                 group_id = self.rule_id.group_id
             elif self.rule_id.group_propagation_option == 'none':
                 group_id = False
+        product_id = self.product_id.with_context(lang=self._get_lang())
         return {
-            'product_description_variants': self.description_picking and self.description_picking.replace(self.product_id._get_description(self.picking_type_id), ''),
+            'product_description_variants': self.description_picking and self.description_picking.replace(product_id._get_description(self.picking_type_id), ''),
             'date_planned': self.date,
             'date_deadline': self.date_deadline,
             'move_dest_ids': self,
@@ -1585,24 +1588,31 @@ class StockMove(models.Model):
         return new_move_vals
 
     def _recompute_state(self):
+        moves_state_to_write = defaultdict(OrderedSet)
         for move in self:
             if move.state in ('cancel', 'done', 'draft'):
                 continue
             elif move.reserved_availability == move.product_uom_qty:
-                move.state = 'assigned'
+                moves_state_to_write['assigned'].add(move.id)
             elif move.reserved_availability and move.reserved_availability <= move.product_uom_qty:
-                move.state = 'partially_available'
+                moves_state_to_write['partially_available'].add(move.id)
+            elif move.procure_method == 'make_to_order' and not move.move_orig_ids:
+                moves_state_to_write['waiting'].add(move.id)
+            elif move.move_orig_ids and any(orig.state not in ('done', 'cancel') for orig in move.move_orig_ids):
+                moves_state_to_write['waiting'].add(move.id)
             else:
-                if move.procure_method == 'make_to_order' and not move.move_orig_ids:
-                    move.state = 'waiting'
-                elif move.move_orig_ids and any(orig.state not in ('done', 'cancel') for orig in move.move_orig_ids):
-                    move.state = 'waiting'
-                else:
-                    move.state = 'confirmed'
+                moves_state_to_write['confirmed'].add(move.id)
+        for state, moves_ids in moves_state_to_write.items():
+            moves = self.env['stock.move'].browse(moves_ids)
+            moves.write({'state': state})
 
     @api.model
     def _consuming_picking_types(self):
         return ['outgoing']
+
+    def _get_lang(self):
+        """Determine language to use for translated description"""
+        return self.picking_id.partner_id.lang or self.partner_id.lang or self.env.user.lang
 
     def _get_source_document(self):
         """ Return the move's document, used by `report.stock.report_product_product_replenishment`

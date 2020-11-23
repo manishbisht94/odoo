@@ -94,7 +94,7 @@ class AccountReconcileModelLine(models.Model):
         for record in self:
             if record.amount_type == 'fixed' and record.amount == 0:
                 raise UserError(_('The amount is not a number'))
-            if record.amount_type == 'percentage' and not 0 < record.amount <= 100:
+            if record.amount_type == 'percentage' and not 0 < record.amount:
                 raise UserError(_('The amount is not a percentage'))
             if record.amount_type == 'regex':
                 try:
@@ -125,7 +125,7 @@ class AccountReconcileModel(models.Model):
     ], string='Type', default='writeoff_button', required=True)
     auto_reconcile = fields.Boolean(string='Auto-validate',
         help='Validate the statement line automatically (reconciliation based on your rule).')
-    to_check = fields.Boolean(string='To Check', default=False, help='This matching rule is used when the user is not certain of all the informations of the counterpart.')
+    to_check = fields.Boolean(string='To Check', default=False, help='This matching rule is used when the user is not certain of all the information of the counterpart.')
     matching_order = fields.Selection(
         selection=[
             ('old_first', 'Oldest first'),
@@ -317,7 +317,7 @@ class AccountReconcileModel(models.Model):
         lines_vals_list = []
 
         for line in self.line_ids:
-            currency_id = st_line.currency_id or st_line.journal_id.currency_id or self.company_id.currency_id 
+            currency_id = st_line.currency_id or st_line.journal_id.currency_id or self.company_id.currency_id
             if not line.account_id or currency_id.is_zero(residual_balance):
                 return []
 
@@ -795,8 +795,10 @@ class AccountReconcileModel(models.Model):
             lines_vals_list = self._prepare_reconciliation(st_line, aml_ids=rslt['aml_ids'], partner=partner)
 
             # A write-off must be applied if there are some 'new' lines to propose.
-            if not lines_vals_list or any(not line_vals.get('id') for line_vals in lines_vals_list):
+            write_off_lines_vals = list(filter(lambda x: 'id' not in x, lines_vals_list))
+            if not lines_vals_list or write_off_lines_vals:
                 rslt['status'] = 'write_off'
+                rslt['write_off_vals'] = write_off_lines_vals
 
             # Process auto-reconciliation. We only do that for the first two priorities, if they are not matched elsewhere.
             if lines_vals_list and priorities & {1, 3} and self.auto_reconcile:

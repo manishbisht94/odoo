@@ -361,6 +361,7 @@ class SaleOrder(models.Model):
         - Payment terms
         - Invoice address
         - Delivery address
+        - Sales Team
         """
         if not self.partner_id:
             self.update({
@@ -389,13 +390,17 @@ class SaleOrder(models.Model):
         if self.env['ir.config_parameter'].sudo().get_param('account.use_invoice_terms') and self.env.company.invoice_terms:
             values['note'] = self.with_context(lang=self.partner_id.lang).env.company.invoice_terms
         if not self.env.context.get('not_self_saleperson') or not self.team_id:
-            values['team_id'] = self.env['crm.team']._get_default_team_id(domain=['|', ('company_id', '=', self.company_id.id), ('company_id', '=', False)],user_id=user_id)
+            values['team_id'] = self.env['crm.team'].with_context(
+                default_team_id=self.partner_id.team_id.id
+            )._get_default_team_id(domain=['|', ('company_id', '=', self.company_id.id), ('company_id', '=', False)], user_id=user_id)
         self.update(values)
 
     @api.onchange('user_id')
     def onchange_user_id(self):
         if self.user_id:
-            self.team_id = self.env['crm.team']._get_default_team_id(user_id=self.user_id.id)
+            self.team_id = self.env['crm.team'].with_context(
+                default_team_id=self.team_id.id
+            )._get_default_team_id(user_id=self.user_id.id)
 
     @api.onchange('partner_id')
     def onchange_partner_id_warning(self):
@@ -1020,7 +1025,7 @@ Reason(s) of this behavior could be:
             'currency_id': currency.id,
             'partner_id': partner.id,
             'sale_order_ids': [(6, 0, self.ids)],
-            'type': self[0]._get_payment_type(),
+            'type': self[0]._get_payment_type(vals.get('type')=='form_save'),
         })
 
         transaction = self.env['payment.transaction'].create(vals)
@@ -1077,9 +1082,9 @@ Reason(s) of this behavior could be:
             return self.get_portal_url(query_string='&%s' % auth_param)
         return super(SaleOrder, self)._get_share_url(redirect, signup_partner, pid)
 
-    def _get_payment_type(self):
+    def _get_payment_type(self, tokenize=False):
         self.ensure_one()
-        return 'form'
+        return 'form_save' if tokenize else 'form'
 
     def _get_portal_return_action(self):
         """ Return the action used to display orders when returning from customer portal. """
@@ -1177,12 +1182,8 @@ class SaleOrderLine(models.Model):
             else:
                 line.product_updatable = True
 
-    @api.depends(
-        'qty_invoiced',
-        'qty_delivered',
-        'product_uom_qty',
-        'order_id.state',
-        'product_id.invoice_policy')
+    # no trigger product_id.invoice_policy to avoid retroactively changing SO
+    @api.depends('qty_invoiced', 'qty_delivered', 'product_uom_qty', 'order_id.state')
     def _get_to_invoice_qty(self):
         """
         Compute the quantity to invoice. If the invoice policy is order, the quantity to invoice is
@@ -1869,8 +1870,10 @@ class SaleOrderLine(models.Model):
         for ptav in (no_variant_ptavs - custom_ptavs):
             name += "\n" + ptav.with_context(lang=self.order_id.partner_id.lang).display_name
 
+        # Sort the values according to _order settings, because it doesn't work for virtual records in onchange
+        custom_values = sorted(self.product_custom_attribute_value_ids, key=lambda r: (r.custom_product_template_attribute_value_id.id, r.id))
         # display the is_custom values
-        for pacv in self.product_custom_attribute_value_ids:
+        for pacv in custom_values:
             name += "\n" + pacv.with_context(lang=self.order_id.partner_id.lang).display_name
 
         return name

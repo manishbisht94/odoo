@@ -3,19 +3,8 @@
 # 	* hr_timesheet
 # 
 # Translators:
-# Pedro M. Baeza <pedro.baeza@gmail.com>, 2020
 # Jesús Alan Ramos Rodríguez <alan.ramos@jarsa.com.mx>, 2020
-# Carlos Lopez <celm1990@hotmail.com>, 2020
-# Lina Maria Avendaño Carvajal <lina8823@gmail.com>, 2020
-# RGB Consulting <odoo@rgbconsulting.com>, 2020
-# Nicolás Broggi <rnbroggi@gmail.com>, 2020
-# Jimmy Ramos <jimmybanegas93@gmail.com>, 2020
 # Jon Perez <jop@odoo.com>, 2020
-# Mariana Santos Romo <msn@odoo.com>, 2020
-# VivianMontana23 <vivianpvm@gmail.com>, 2020
-# Jesse Garza <jga@odoo.com>, 2020
-# Efrem Jimenez <efj@odoo.com>, 2020
-# Osiris Román <osiris.roman@yachaytech.edu.ec>, 2020
 # Martin Trigaux, 2020
 # 
 msgid ""

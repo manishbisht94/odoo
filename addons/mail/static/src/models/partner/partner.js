@@ -95,7 +95,8 @@ function factory(dependencies) {
                 if (partners.length < limit) {
                     if (
                         partner !== currentPartner &&
-                        searchRegexp.test(partner.name)
+                        searchRegexp.test(partner.name) &&
+                        partner.user
                     ) {
                         partners.push(partner);
                     }
@@ -221,7 +222,7 @@ function factory(dependencies) {
         static async _fetchImStatus() {
             const partnerIds = [];
             for (const partner of this.all()) {
-                if (partner.im_status !== 'im_partner') {
+                if (partner.im_status !== 'im_partner' && partner.id > 0) {
                     partnerIds.push(partner.id);
                 }
             }

@@ -3,24 +3,13 @@
 # 	* crm
 # 
 # Translators:
-# Cristóbal Martí Oliver <info@moblesmarti.com>, 2020
-# Leonardo J. Caballero G. <leonardocaballero@gmail.com>, 2020
-# Pedro M. Baeza <pedro.baeza@gmail.com>, 2020
-# José Vicente <txusev@gmail.com>, 2020
-# Antonio Trueba, 2020
-# Juan Fernando Cano González <jfcano@nanobytes.es>, 2020
-# Nicolás Broggi <rnbroggi@gmail.com>, 2020
-# Oscar Soto <oscar.soto.ochoa@gmail.com>, 2020
-# Osiris Román <osiris.roman@yachaytech.edu.ec>, 2020
 # Cristopher Cravioto <ccr@odoo.com>, 2020
-# Mariana Santos Romo <msn@odoo.com>, 2020
-# Jesse Garza <jga@odoo.com>, 2020
-# Martin Trigaux, 2020
 # Sergio Hevia <sah@talleresbernesga.com>, 2020
 # Luis M. Ontalba <luis.martinez@tecnativa.com>, 2020
 # RGB Consulting <odoo@rgbconsulting.com>, 2020
 # Jon Perez <jop@odoo.com>, 2020
-# Jesús Alan Ramos Rodríguez <alan.ramos@jarsa.com.mx>, 2020
+# Martin Trigaux, 2020
+# Mariana Santos Romo <msn@odoo.com>, 2020
 # 
 msgid ""
 msgstr ""
@@ -28,7 +17,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2020-09-29 13:45+0000\n"
 "PO-Revision-Date: 2020-09-07 08:11+0000\n"
-"Last-Translator: Jesús Alan Ramos Rodríguez <alan.ramos@jarsa.com.mx>, 2020\n"
+"Last-Translator: Mariana Santos Romo <msn@odoo.com>, 2020\n"
 "Language-Team: Spanish (https://www.transifex.com/odoo/teams/41243/es/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -519,10 +508,8 @@ msgstr "Rebote"
 #. module: crm
 #: model_terms:ir.ui.view,arch_db:crm.res_config_settings_view_form
 msgid ""
-"By <b>updating lead probabilities</b>, you will regenerate the frequency table and recompute the probability of all the leads.\n"
-"                                        This can be useful after changing the start date (you need to save first !) or to ensure every lead probabilities are up to date.\n"
-"                                        <br/>\n"
-"                                        This can take up to several minutes depending on the number of leads you have !!!"
+"Use this button to update the probabilities of all leads. This can take up "
+"to several minutes depending on how many there are."
 msgstr ""
 
 #. module: crm
@@ -2789,8 +2776,8 @@ msgstr ""
 
 #. module: crm
 #: model_terms:ir.ui.view,arch_db:crm.res_config_settings_view_form
-msgid "Start Date: Consider leads created as of the"
-msgstr ""
+msgid "Consider leads created as of the"
+msgstr "Considere las iniciativas creadas a partir de la"
 
 #. module: crm
 #: model_terms:ir.actions.act_window,help:crm.crm_activity_report_action
@@ -3159,8 +3146,8 @@ msgstr "Nº de mensajes sin leer"
 
 #. module: crm
 #: model_terms:ir.ui.view,arch_db:crm.res_config_settings_view_form
-msgid "Update"
-msgstr "Actualizar"
+msgid "Update Probabilities"
+msgstr ""
 
 #. module: crm
 #: model:ir.model.fields,field_description:crm.field_utm_campaign__use_leads
